@@ -2,7 +2,7 @@
     "name": "netident/otel-enduser",
     "description": "Enriches OpenTelemetry SERVER spans with end-user identity (device id, session id, client address) for PHP apps using ext-opentelemetry auto-instrumentation.",
     "type": "library",
-    "license": "proprietary",
+    "license": "Apache-2.0",
     "homepage": "https://github.com/netident/netident-enduser",
     "support": {
         "source": "https://github.com/netident/netident-enduser"

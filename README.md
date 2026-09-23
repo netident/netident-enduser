@@ -41,8 +41,8 @@ NETiDENT platform: download the zip and point Composer at it with an
 
 ```bash
 mkdir -p ./netident-sdk
-curl -fsSL -o ./netident-sdk/netident-otel-enduser-0.1.1.zip \
-  https://<your-platform-host>/sdk/netident-otel-enduser-0.1.1.zip
+curl -fsSL -o ./netident-sdk/netident-otel-enduser-0.1.2.zip \
+  https://<your-platform-host>/sdk/netident-otel-enduser-0.1.2.zip
 ```
 
 ```json
@@ -105,11 +105,33 @@ Things to know before turning it on:
 | `NETIDENT_HASH_CLIENT_IP` | `false` | when `true`, send `sha256(salt + ip)` truncated to 32 hex chars instead of the raw IP (for PDPA / GDPR-sensitive deployments) |
 | `NETIDENT_IP_HASH_SALT` | empty | salt used when `NETIDENT_HASH_CLIENT_IP=true`; an empty salt is allowed but a real deployment should set one |
 | `NETIDENT_ENDUSER_DISABLED` | `false` | set to `true` to disable this package entirely without removing it |
+| `NETIDENT_SERVER_TIMING` | `true` | on by default; `off` / `false` / `0` stops the `Server-Timing: traceparent;desc=…` response header described below |
 
 Standard OpenTelemetry variables are also honoured: setting
 `OTEL_PHP_DISABLED_INSTRUMENTATIONS` to a comma list containing
 `netident-enduser` or `all` disables this package the same way any other
 auto-instrumentation is disabled.
+
+## Linking page loads and API calls to traces
+
+Every request whose SERVER span is sampled gets a response header:
+
+```
+Server-Timing: traceparent;desc="00-<32 hex trace id>-<16 hex span id>-01"
+```
+
+This is **on by default** — set `NETIDENT_SERVER_TIMING=off` to stop it. The
+NETiDENT browser script reads it from the page's navigation-timing entry and
+from every fetch/XHR's resource-timing entry, which is how a page load — and
+every API call it makes, sampled or not — gets linked to its backend trace.
+It names the trace only: no timings, no user data, and it never replaces a
+`Server-Timing` value your app already sends (added with `header(..., false)`,
+so existing values are kept).
+
+If the page calling your API is on a different origin, the browser only
+exposes `Server-Timing` to that page's script when your API's response also
+sends `Timing-Allow-Origin: https://<page origin>` (or `*`). A same-origin
+call needs nothing extra.
 
 ## Verify
 
@@ -134,3 +156,7 @@ Set `NETIDENT_ENDUSER_DISABLED=true`, or add `netident-enduser` (or `all`) to
 A mobile app, a service-to-service call, or any client that cannot send a
 `baggage` header can instead send the device id in a plain `X-Device-Id`
 header — it is used whenever no `baggage` member is present.
+
+## License
+
+Apache-2.0 — see [LICENSE](LICENSE).

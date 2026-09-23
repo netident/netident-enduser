@@ -11,6 +11,7 @@ declare(strict_types=1);
 use Netident\OtelEnduser\Config;
 use Netident\OtelEnduser\CookieIssuer;
 use Netident\OtelEnduser\Enricher;
+use Netident\OtelEnduser\ServerTiming;
 use OpenTelemetry\API\Trace\SpanBuilderInterface;
 use OpenTelemetry\API\Trace\SpanKind;
 
@@ -94,6 +95,25 @@ try {
                             ]);
                         },
                     );
+                }
+
+                // Server-Timing is likewise emitted once per request, for
+                // the first (outermost) SERVER span only — same guard shape
+                // as the cookie issuer above, so a second, nested SERVER
+                // span (a second instrumentation, or the framework's own)
+                // never adds a second header.
+                static $serverTimingHandledFor = null;
+                if ($serverTimingHandledFor !== $marker || $serverTimingHandledFor === null) {
+                    $serverTimingHandledFor = $marker;
+                    if ($config->serverTiming && !headers_sent() && $span->getContext()->isSampled()) {
+                        $headerValue = ServerTiming::headerValue(
+                            $span->getContext()->getTraceId(),
+                            $span->getContext()->getSpanId(),
+                        );
+                        if ($headerValue !== null) {
+                            header('Server-Timing: ' . $headerValue, false);
+                        }
+                    }
                 }
 
                 $attributes = Enricher::attributes($_SERVER, $_COOKIE, $config, $issued);

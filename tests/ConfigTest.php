@@ -19,6 +19,7 @@ final class ConfigTest extends TestCase
             'NETIDENT_IP_HASH_SALT',
             'NETIDENT_ENDUSER_DISABLED',
             'NETIDENT_ISSUE_COOKIES',
+            'NETIDENT_SERVER_TIMING',
         ] as $name) {
             putenv($name);
             unset($_SERVER[$name]);
@@ -36,6 +37,7 @@ final class ConfigTest extends TestCase
         $this->assertSame('', $config->ipHashSalt);
         $this->assertFalse($config->disabled);
         $this->assertFalse($config->issueCookies);
+        $this->assertTrue($config->serverTiming);
     }
 
     public function testIssueCookiesIsOptIn(): void
@@ -43,6 +45,17 @@ final class ConfigTest extends TestCase
         putenv('NETIDENT_ISSUE_COOKIES=true');
 
         $this->assertTrue(Config::fromEnv()->issueCookies);
+    }
+
+    public function testServerTimingIsOnByDefaultAndCanBeTurnedOff(): void
+    {
+        foreach (['off', 'false', '0', 'OFF'] as $value) {
+            putenv("NETIDENT_SERVER_TIMING=$value");
+            $this->assertFalse(Config::fromEnv()->serverTiming, "'$value' should disable it");
+        }
+
+        putenv('NETIDENT_SERVER_TIMING=true');
+        $this->assertTrue(Config::fromEnv()->serverTiming);
     }
 
     public function testReadsFromGetenv(): void

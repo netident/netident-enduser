@@ -18,6 +18,7 @@ final class Config
         public readonly string $ipHashSalt,
         public readonly bool $disabled,
         public readonly bool $issueCookies = false,
+        public readonly bool $serverTiming = true,
     ) {
     }
 
@@ -39,6 +40,7 @@ final class Config
             ipHashSalt: $salt,
             disabled: self::isTruthy($disabled),
             issueCookies: self::isTruthy($issueCookies),
+            serverTiming: !self::isTurnedOff(self::env('NETIDENT_SERVER_TIMING')),
         );
     }
 
@@ -57,6 +59,18 @@ final class Config
     private static function isTruthy(string $value): bool
     {
         return strtolower(trim($value)) === 'true';
+    }
+
+    /**
+     * For a flag that defaults to ON (serverTiming): unset means false here,
+     * i.e. stays on; only an explicit off/false/0 turns it off.
+     */
+    private static function isTurnedOff(?string $value): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+        return in_array(strtolower(trim($value)), ['off', 'false', '0'], true);
     }
 
     private static function env(string $name): ?string
