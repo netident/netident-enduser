@@ -9,6 +9,7 @@ declare(strict_types=1);
  */
 
 use Netident\OtelEnduser\Config;
+use Netident\OtelEnduser\CookieIssuer;
 use Netident\OtelEnduser\Enricher;
 use OpenTelemetry\API\Trace\SpanBuilderInterface;
 use OpenTelemetry\API\Trace\SpanKind;
@@ -69,10 +70,33 @@ try {
                     return;
                 }
 
-                // Computed per span, never cached: a request has about one
-                // SERVER span, and anything kept in a static here would outlive
-                // the request on a long-lived php-fpm worker.
-                $attributes = Enricher::attributes($_SERVER, $_COOKIE, $config);
+                // Cookies are issued once per request even when two
+                // instrumentations each open a SERVER span (PSR-15 + the
+                // framework's own), or the second would mint a second pair.
+                // Keyed by the request's start time, because a worker-mode
+                // runtime keeps statics alive across requests.
+                static $issuedFor = null;
+                static $issued = [];
+                $marker = $_SERVER['REQUEST_TIME_FLOAT'] ?? null;
+                if ($issuedFor !== $marker || $issuedFor === null) {
+                    $issuedFor = $marker;
+                    $issued = headers_sent() ? [] : CookieIssuer::issue(
+                        $_SERVER,
+                        $_COOKIE,
+                        $config,
+                        static function (string $name, string $value, int $expires, bool $secure): void {
+                            setcookie($name, $value, [
+                                'expires' => $expires,
+                                'path' => '/',
+                                'secure' => $secure,
+                                'httponly' => false,
+                                'samesite' => 'Lax',
+                            ]);
+                        },
+                    );
+                }
+
+                $attributes = Enricher::attributes($_SERVER, $_COOKIE, $config, $issued);
                 if ($attributes !== []) {
                     $span->setAttributes($attributes);
                 }

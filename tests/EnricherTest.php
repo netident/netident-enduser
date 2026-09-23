@@ -14,10 +14,12 @@ final class EnricherTest extends TestCase
     {
         return new Config(
             deviceCookieName: $overrides['deviceCookieName'] ?? null,
+            sessionCookieName: $overrides['sessionCookieName'] ?? null,
             trustedProxyCidrs: $overrides['trustedProxyCidrs'] ?? [],
             hashClientIp: $overrides['hashClientIp'] ?? false,
             ipHashSalt: $overrides['ipHashSalt'] ?? '',
             disabled: $overrides['disabled'] ?? false,
+            issueCookies: $overrides['issueCookies'] ?? false,
         );
     }
 
@@ -101,6 +103,44 @@ final class EnricherTest extends TestCase
         $attrs = Enricher::attributes($server, [], $config);
 
         $this->assertSame('sess-789', $attrs['session.id']);
+    }
+
+    public function testSessionIdFallsBackToCookie(): void
+    {
+        $server = ['REMOTE_ADDR' => '203.0.113.1'];
+        $cookie = ['_nid_ses' => 'sess-from-cookie'];
+        $config = $this->config(['sessionCookieName' => '_nid_ses']);
+
+        $attrs = Enricher::attributes($server, $cookie, $config);
+
+        $this->assertSame('sess-from-cookie', $attrs['session.id']);
+    }
+
+    public function testBaggageSessionWinsOverCookie(): void
+    {
+        $server = [
+            'HTTP_BAGGAGE' => 'session.id=sess-789',
+            'REMOTE_ADDR' => '203.0.113.1',
+        ];
+        $cookie = ['_nid_ses' => 'sess-from-cookie'];
+        $config = $this->config(['sessionCookieName' => '_nid_ses']);
+
+        $attrs = Enricher::attributes($server, $cookie, $config);
+
+        $this->assertSame('sess-789', $attrs['session.id']);
+    }
+
+    public function testIssuedIdsAreUsedAndMarked(): void
+    {
+        $server = ['REMOTE_ADDR' => '203.0.113.1'];
+        $config = $this->config(['deviceCookieName' => '_nid_dev', 'sessionCookieName' => '_nid_ses']);
+        $issued = ['_nid_dev' => 'dev-minted', '_nid_ses' => 'ses-minted'];
+
+        $attrs = Enricher::attributes($server, ['_nid_ses' => 'bad value!'], $config, $issued);
+
+        $this->assertSame('dev-minted', $attrs['app.device.id']);
+        $this->assertSame('issued', $attrs['app.device.id.source']);
+        $this->assertSame('ses-minted', $attrs['session.id']);
     }
 
     public function testInvalidSessionIdDropped(): void

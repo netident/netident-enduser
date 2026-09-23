@@ -5,7 +5,7 @@
 # "artifact" repo directory — composer never talks to us at install time.
 set -euo pipefail
 
-PKG_VERSION="0.1.0"
+PKG_VERSION="0.1.1"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT_DIR="${OUT_DIR:-$SCRIPT_DIR/../../web/public/sdk}"
 ZIP_NAME="netident-otel-enduser-${PKG_VERSION}.zip"

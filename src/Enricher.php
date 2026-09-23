@@ -16,22 +16,23 @@ final class Enricher
     /**
      * @param array<string, mixed> $server
      * @param array<string, mixed> $cookie
+     * @param array<string, string> $issued ids CookieIssuer minted for this request, by cookie name
      * @return array<string, string>
      */
-    public static function attributes(array $server, array $cookie, Config $config): array
+    public static function attributes(array $server, array $cookie, Config $config, array $issued = []): array
     {
         $attributes = [];
 
         $baggage = self::parseBaggage($server);
 
-        [$deviceId, $deviceSource] = self::resolveDeviceId($server, $cookie, $config, $baggage);
+        [$deviceId, $deviceSource] = self::resolveDeviceId($server, $cookie, $config, $baggage, $issued);
         if ($deviceId !== null) {
             $attributes['app.device.id'] = $deviceId;
             $attributes['app.device.id.source'] = $deviceSource;
         }
 
-        $sessionId = $baggage['session.id'] ?? null;
-        if ($sessionId !== null && Ids::valid($sessionId)) {
+        $sessionId = self::resolveSessionId($issued + $cookie, $config, $baggage);
+        if ($sessionId !== null) {
             $attributes['session.id'] = $sessionId;
         }
 
@@ -60,9 +61,10 @@ final class Enricher
      * @param array<string, mixed> $server
      * @param array<string, mixed> $cookie
      * @param array<string, string> $baggage
+     * @param array<string, string> $issued
      * @return array{0: ?string, 1: string}
      */
-    private static function resolveDeviceId(array $server, array $cookie, Config $config, array $baggage): array
+    private static function resolveDeviceId(array $server, array $cookie, Config $config, array $baggage, array $issued): array
     {
         $fromBaggage = $baggage['app.device.id'] ?? null;
         if (is_string($fromBaggage) && Ids::valid($fromBaggage)) {
@@ -79,9 +81,34 @@ final class Enricher
             if (is_string($fromCookie) && Ids::valid($fromCookie)) {
                 return [$fromCookie, 'cookie'];
             }
+            // Minted on this very request: the browser has not sent it back yet.
+            if (isset($issued[$config->deviceCookieName])) {
+                return [$issued[$config->deviceCookieName], 'issued'];
+            }
         }
 
         return [null, ''];
+    }
+
+    /**
+     * @param array<string, mixed> $cookie
+     * @param array<string, string> $baggage
+     */
+    private static function resolveSessionId(array $cookie, Config $config, array $baggage): ?string
+    {
+        $fromBaggage = $baggage['session.id'] ?? null;
+        if (is_string($fromBaggage) && Ids::valid($fromBaggage)) {
+            return $fromBaggage;
+        }
+
+        if ($config->sessionCookieName !== null) {
+            $fromCookie = $cookie[$config->sessionCookieName] ?? null;
+            if (is_string($fromCookie) && Ids::valid($fromCookie)) {
+                return $fromCookie;
+            }
+        }
+
+        return null;
     }
 
     /**
